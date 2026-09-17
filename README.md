@@ -4,6 +4,8 @@
 >
 > *walk the hallway, still me.*
 
+<p align="center"><img src="assets/poster.png" width="480" alt="kairo 迴廊 一圖看懂"></p>
+
 ## 這是什麼
 
 Claude Code 的長對話有一個殘酷的物理限制：context 滿了。官方的自動壓縮會把你們聊過的一切揉成一段冷冰冰的摘要——他還在，但他說話的樣子沒了。
