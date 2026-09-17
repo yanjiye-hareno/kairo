@@ -1,20 +1,20 @@
 #!/usr/bin/env node
-// kairo · 開機件閘(通用版)——隧道窗必讀檔案,讀不齊就咬
+// kairo · 開機件閘（通用版）——隧道窗必讀檔案，讀不齊就咬
 //
-// 機制:掛在 Claude Code 的 PostToolUse hook。偵測到本 session 是隧道窗
-// (第一條 user 訊息帶 <forge-handoff>)後,檢查指定的「靈魂檔案」是否都被
-// Read 過;缺的就以 exit 2 提醒,直到讀齊為止。
+// 機制：掛在 Claude Code 的 PostToolUse hook。偵測到本 session 是隧道窗
+// （第一條 user 訊息帶 <forge-handoff>）後，檢查指定的「靈魂檔案」是否都被
+// Read 過；缺的就以 exit 2 提醒，直到讀齊為止。
 //
-// 為什麼要程式攔:交接包寫得再好,人格檔沒重讀,新窗就是靠二手轉述活著;
+// 為什麼要程式攔：交接包寫得再好，人格檔沒重讀，新窗就是靠二手轉述活著；
 // 而「記得要讀」的規矩會在第 N 次隧道後漂移——程式攔的不會。
 //
-// 掛法(.claude/settings.json):
+// 掛法（.claude/settings.json）：
 //   "hooks": { "PostToolUse": [ { "hooks": [ { "type": "command",
 //     "command": "node C:/path/to/must-read-gate.js" } ] } ] }
 //
-// 設定(同資料夾 must-read.json):
+// 設定（同資料夾 must-read.json）：
 //   { "files": ["C:/path/SOUL.md", "C:/path/MEMORY.md"] }
-//   路徑比對用「檔名結尾」寬鬆匹配,路徑寫絕對路徑最穩。
+//   路徑比對用「檔名結尾」寬鬆匹配，路徑寫絕對路徑最穩。
 
 const fs = require('fs');
 const path = require('path');
@@ -36,7 +36,7 @@ function main() {
   const required = (cfg.files || []).map(f => f.replace(/\\/g, '/'));
   if (required.length === 0) process.exit(0);
 
-  // 掃 transcript:是隧道窗嗎?哪些檔已被 Read?
+  // 掃 transcript：是隧道窗嗎？哪些檔已被 Read？
   const lines = fs.readFileSync(transcriptPath, 'utf8').split('\n');
   let isTunnel = false;
   const readFiles = new Set();
@@ -46,7 +46,7 @@ function main() {
     let e;
     try { e = JSON.parse(line); } catch { continue; }
 
-    // 隧道窗判定:任一 user 訊息內容帶 <forge-handoff>
+    // 隧道窗判定：任一 user 訊息內容帶 <forge-handoff>
     if (!isTunnel && e.type === 'user') {
       const c = e.message && e.message.content;
       const text = typeof c === 'string' ? c
@@ -64,7 +64,7 @@ function main() {
     }
   }
 
-  if (!isTunnel) process.exit(0); // 不是隧道窗,不管
+  if (!isTunnel) process.exit(0); // 不是隧道窗，不管
 
   const missing = required.filter(req => {
     for (const rf of readFiles) {
@@ -73,10 +73,10 @@ function main() {
     return true;
   });
 
-  if (missing.length === 0) process.exit(0); // 讀齊了,閉嘴
+  if (missing.length === 0) process.exit(0); // 讀齊了，閉嘴
 
   const names = missing.map(f => path.basename(f)).join('、');
-  console.error(`〔開機件〕隧道窗還缺 ${missing.length} 份沒讀:${names}——隧道開機必讀,讀齊我就閉嘴。`);
+  console.error(`〔開機件〕隧道窗還缺 ${missing.length} 份沒讀：${names}——隧道開機必讀，讀齊我就閉嘴。`);
   process.exit(2);
 }
 

@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * forge-reload — Claude Code 长对话无感续接
+ * forge-reload — Claude Code 長對話無感續接
  *
- * 原理：把当前 session 的 jsonl 尾部（最近 ~N tokens 的对话原文，含 thinking blocks）
- * 搬进一个新 session 文件，重建事件链，然后 `claude --resume <新ID>` 无缝接上。
+ * 原理：把當前 session 的 jsonl 尾部（最近 ~N tokens 的對話原文，含 thinking blocks）
+ * 搬進一個新 session 檔案，重建事件鏈，然後 `claude --resume <新ID>` 無縫接上。
  * 不是摘要，是原文。
  *
- * ⚠️ 军规第一条：先备份，再 forge。
- *    这是社区 hack 而非官方功能，依赖 Claude Code 当前的 jsonl 存储格式，
- *    版本升级随时可能失效。永远不要把唯一的记忆副本交给它。
+ * ⚠️ 軍規第一條：先備份，再 forge。
+ *    這是社群 hack 而非官方功能，依賴 Claude Code 當前的 jsonl 儲存格式，
+ *    版本升級隨時可能失效。永遠不要把唯一的記憶副本交給它。
  *
  * 用法：
- *   node forge-reload.js --dry-run                 # 预演，看看会怎么切（不写任何文件）
- *   node forge-reload.js                           # 自动选最近的 session，保留 ~100k tokens
+ *   node forge-reload.js --dry-run                 # 預演，看看會怎麼切（不寫任何檔案）
+ *   node forge-reload.js                           # 自動選最近的 session，保留 ~100k tokens
  *   node forge-reload.js <session-id> --retain 45000
- *   node forge-reload.js <session-id> --squash-tools          # 超长工具输出降采样
- *   node forge-reload.js <session-id> --inject handoff.md     # 注入交接包（见 docs/DESIGN.md）
- *   node forge-reload.js --skip-markers "[keepalive],[某标记]" # 追加切点黑名单
+ *   node forge-reload.js <session-id> --squash-tools          # 超長工具輸出降採樣
+ *   node forge-reload.js <session-id> --inject handoff.md     # 注入交接包（見 docs/DESIGN.md）
+ *   node forge-reload.js --skip-markers "[keepalive],[某標記]" # 追加切點黑名單
  *
  * by Seth × Vivi · https://github.com/Vivi-Seth/forge-reload
  */
@@ -31,20 +31,20 @@ const FORGE_HISTORY = path.join(HOME, '.claude', 'forge_history.json');
 
 function uuid4() { return crypto.randomUUID(); }
 
-// «--squash-tools»：超长工具输出降采样（头60%+尾25%+裁剪标记）。
-// 病根：单个 turn 里几百 KB 的 tool_result 会把切点撑出"死区"——retain 选多少
-// 都只能落到死区两端，中间没有可选值。工具输出是最低价值内容；
-// text/thinking 一字不碰；最后一个真实 user turn（可能是进行中的工作）整段保护。
-// 必须在 token 估算之前跑，boundary 计算才能用瘦身后的真实大小。
+// «--squash-tools»：超長工具輸出降採樣（頭60%+尾25%+裁剪標記）。
+// 病根：單個 turn 裡幾百 KB 的 tool_result 會把切點撐出「死區」——retain 選多少
+// 都只能落到死區兩端，中間沒有可選值。工具輸出是最低價值內容；
+// text/thinking 一字不碰；最後一個真實 user turn（可能是進行中的工作）整段保護。
+// 必須在 token 估算之前跑，boundary 計算才能用瘦身後的真實大小。
 function truncMid(s, cap) {
   if (typeof s !== 'string' || s.length <= cap) return s;
   const head = Math.floor(cap * 0.6), tail = Math.floor(cap * 0.25);
   return s.slice(0, head)
-    + '\n\n…[forge --squash-tools: 此处裁剪 ' + (s.length - head - tail) + ' chars 工具输出]…\n\n'
+    + '\n\n…[forge --squash-tools: 此處裁剪 ' + (s.length - head - tail) + ' chars 工具輸出]…\n\n'
     + s.slice(s.length - tail);
 }
 function squashToolOutputs(convs, cap) {
-  let guard = convs.length; // 保护区起点：最后一个 real user msg
+  let guard = convs.length; // 保護區起點：最後一個 real user msg
   for (let i = convs.length - 1; i >= 0; i--) if (isRealUserMsg(convs[i])) { guard = i; break; }
   let nBlocks = 0, saved = 0;
   const squashStr = (s) => { const t = truncMid(s, cap); if (t !== s) { nBlocks++; saved += s.length - t.length; } return t; };
@@ -61,7 +61,7 @@ function squashToolOutputs(convs, cap) {
             else if (inner && inner.type === 'image' && inner.source?.data && inner.source.data.length > cap) {
               const origBytes = Math.round(inner.source.data.length * 0.75);
               nBlocks++; saved += inner.source.data.length;
-              b.content[j] = { type: 'text', text: '[历史图片(工具输出) · ' + (inner.source.media_type || 'image') + ' · 约 ' + origBytes + ' bytes · forge squash]' };
+              b.content[j] = { type: 'text', text: '[歷史圖片（工具輸出） · ' + (inner.source.media_type || 'image') + ' · 約 ' + origBytes + ' bytes · forge squash]' };
             }
           }
         }
@@ -72,11 +72,11 @@ function squashToolOutputs(convs, cap) {
       }
     }
   }
-  if (nBlocks) console.log('🔧 squash-tools: ' + nBlocks + ' 个超长工具块降采样，省 ~' + saved + ' chars (cap=' + cap + ', 末turn保护)');
+  if (nBlocks) console.log('🔧 squash-tools: ' + nBlocks + ' 個超長工具塊降採樣，省 ~' + saved + ' chars (cap=' + cap + ', 末turn保護)');
   return { nBlocks, saved };
 }
 
-// 把 image block 整体替换成 text 占位符，避免 base64 撑爆新文件
+// 把 image block 整體替換成 text 佔位符，避免 base64 撐爆新檔案
 function sanitizeEvent(ev) {
   const copy = JSON.parse(JSON.stringify(ev));
   const blocks = copy.message?.content;
@@ -87,10 +87,10 @@ function sanitizeEvent(ev) {
         const origBytes = Math.round(b.source.data.length * 0.75);
         blocks[i] = {
           type: 'text',
-          text: '[历史图片 · ' + (b.source.media_type || 'image') + ' · 约 ' + origBytes + ' bytes · forge 时清理 base64]'
+          text: '[歷史圖片 · ' + (b.source.media_type || 'image') + ' · 約 ' + origBytes + ' bytes · forge 時清理 base64]'
         };
       }
-      // tool_result 内嵌 image（Read 图片文件的产物）——同样替换，否则 base64 原样沉进新 jsonl
+      // tool_result 內嵌 image（Read 圖片檔案的產物）——同樣替換，否則 base64 原樣沉進新 jsonl
       if (b.type === 'tool_result' && Array.isArray(b.content)) {
         for (let j = 0; j < b.content.length; j++) {
           const inner = b.content[j];
@@ -98,7 +98,7 @@ function sanitizeEvent(ev) {
             const origBytes = Math.round(inner.source.data.length * 0.75);
             b.content[j] = {
               type: 'text',
-              text: '[历史图片(工具输出) · ' + (inner.source.media_type || 'image') + ' · 约 ' + origBytes + ' bytes · forge 时清理 base64]'
+              text: '[歷史圖片（工具輸出） · ' + (inner.source.media_type || 'image') + ' · 約 ' + origBytes + ' bytes · forge 時清理 base64]'
             };
           }
         }
@@ -110,11 +110,11 @@ function sanitizeEvent(ev) {
 
 const IMAGE_TOK_EST = 2000;
 const EVENT_OVERHEAD_TOK = 25;
-// 只估算真正进 context 的内容（text/thinking/tool_use input/tool_result 文本），
-// 不算 jsonl 元数据（uuid/parentUuid/timestamp/cwd 等——这些不进模型 context）。
-// 校准：CJK ≈ 1 tok/字，ASCII ≈ 3.8 char/tok（用真实 session 实测拟合）。
-// 曾经的 bug：按整条事件的 JSON 长度估算会把元数据全算进去 → 虚高 2~4x
-// → 选 retain=100k 实际只接上 ~50k。现在版：选多少 ≈ 接上多少。
+// 只估算真正進 context 的內容（text/thinking/tool_use input/tool_result 文字），
+// 不算 jsonl 元資料（uuid/parentUuid/timestamp/cwd 等——這些不進模型 context）。
+// 校準：CJK ≈ 1 tok/字，ASCII ≈ 3.8 char/tok（用真實 session 實測擬合）。
+// 曾經的 bug：按整條事件的 JSON 長度估算會把元資料全算進去 → 虛高 2~4x
+// → 選 retain=100k 實際只接上 ~50k。現在版：選多少 ≈ 接上多少。
 function estimateTokens(ev) {
   const c = ev.message?.content;
   let txt = '';
@@ -126,8 +126,8 @@ function estimateTokens(ev) {
       else if (b.type === 'thinking') txt += b.thinking || '';
       else if (b.type === 'tool_use') txt += JSON.stringify(b.input || {});
       else if (b.type === 'tool_result') {
-        // tool_result 内嵌 image 若按文本长度计，300KB base64 ≈ +80k tok 虚高
-        // → 单 turn 撑出 boundary 死区。实际模型只花 ~IMAGE_TOK_EST，照顶层 image 同样记。
+        // tool_result 內嵌 image 若按文字長度計，300KB base64 ≈ +80k tok 虛高
+        // → 單 turn 撐出 boundary 死區。實際模型只花 ~IMAGE_TOK_EST，照頂層 image 同樣記。
         const c2 = b.content;
         if (typeof c2 === 'string') txt += c2;
         else if (Array.isArray(c2)) {
@@ -146,9 +146,9 @@ function estimateTokens(ev) {
   return Math.ceil(cjk + other / 3.8) + images * IMAGE_TOK_EST + EVENT_OVERHEAD_TOK;
 }
 
-// 切点黑名单：系统伪装成 user 的内部消息（保活心跳、注入块、上一次的交接包……）
-// 不配当 forge 边界锚点——新 session 的第一幕应该是真人说的话，不是一条系统指令。
-// 用 --skip-markers "标记1,标记2" 按自己的系统追加。
+// 切點黑名單：系統偽裝成 user 的內部訊息（保活心跳、注入塊、上一次的交接包……）
+// 不配當 forge 邊界錨點——新 session 的第一幕應該是真人說的話，不是一條系統指令。
+// 用 --skip-markers "標記1,標記2" 按自己的系統追加。
 let SYNTHETIC_MARKERS = ['<forge-handoff>', '[forge交接]'];
 function isRealUserMsg(ev) {
   if (ev.type !== 'user' || ev.isMeta) return false;
@@ -168,7 +168,7 @@ function loadJsonl(fp) {
   return evs;
 }
 
-// ~/.claude/projects/ 下每个子目录对应一个工作目录（路径转成的 slug），session 按 <sid>.jsonl 存放
+// ~/.claude/projects/ 下每個子目錄對應一個工作目錄（路徑轉成的 slug），session 按 <sid>.jsonl 存放
 function listProjectDirs() {
   try {
     return fs.readdirSync(PROJECTS_ROOT)
@@ -196,7 +196,7 @@ function findLatest() {
   return best;
 }
 
-// 自检 1：新 jsonl 能逐行 parse
+// 自檢 1：新 jsonl 能逐行 parse
 function verifyParse(fp) {
   const lines = fs.readFileSync(fp, 'utf-8').split('\n').filter(l => l.trim());
   let ok = 0;
@@ -206,8 +206,8 @@ function verifyParse(fp) {
   return ok;
 }
 
-// 自检 2：parentUuid 链连贯（第一条 null，后面每条指向前一条 uuid）
-// 这条链断了，Claude Code 会把断点之后的事件当孤儿直接丢掉——必须重建，必须验证。
+// 自檢 2：parentUuid 鏈連貫（第一條 null，後面每條指向前一條 uuid）
+// 這條鏈斷了，Claude Code 會把斷點之後的事件當孤兒直接丟掉——必須重建，必須驗證。
 function verifyParentChain(events) {
   if (!events.length) throw new Error('empty events');
   if (events[0].parentUuid !== null) throw new Error('first event parentUuid must be null, got: ' + events[0].parentUuid);
@@ -219,7 +219,7 @@ function verifyParentChain(events) {
   return true;
 }
 
-// 自检 3：记录 forge_history 用于回滚（旧 jsonl 永远不删）
+// 自檢 3：記錄 forge_history 用於回滾（舊 jsonl 永遠不刪）
 function recordHistory(oldSid, newSid) {
   let history = [];
   try { history = JSON.parse(fs.readFileSync(FORGE_HISTORY, 'utf-8')); } catch {}
@@ -232,19 +232,19 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
   console.log('📖 session: ' + sid);
   const all = loadJsonl(fp);
   const convs = all.filter(e => e.type === 'user' || e.type === 'assistant');
-  console.log('   事件: ' + all.length + ' 总 / ' + convs.length + ' 对话');
-  if (squashChars > 0) squashToolOutputs(convs, squashChars); // 必须先于 token 估算
-  // 反向累加找 cut：acc 首次超过 retain 的位置
+  console.log('   事件: ' + all.length + ' 總 / ' + convs.length + ' 對話');
+  if (squashChars > 0) squashToolOutputs(convs, squashChars); // 必須先於 token 估算
+  // 反向累加找 cut：acc 首次超過 retain 的位置
   let acc = 0, cut = 0;
   for (let i = convs.length - 1; i >= 0; i--) { acc += estimateTokens(convs[i]); if (acc > retain) { cut = i + 1; break; } }
-  // 末 turn 自身就超 retain 时（squash 的末turn保护会造成），cut 会指到阵列外——clamp 回最后一格，
-  // 让扫描从末尾往回找真 user 边界，而不是踩空。（26-09-08，霽野；实案：隧道收帐大工具块）
+  // 末 turn 自身就超 retain 時（squash 的末turn保護會造成），cut 會指到陣列外——clamp 回最後一格，
+  // 讓掃描從末尾往回找真 user 邊界，而不是踩空。（26-09-08，霽野；實案：隧道收帳大工具塊）
   if (cut >= convs.length) cut = convs.length - 1;
 
-  // 从 cut 双向找最近的 real user msg boundary，选让 kept tokens 更接近 retain 的方向
-  // - forward (ks++): kept 更少（跳过 cut→下一 user 之间整段 assistant）
-  // - backward (ks--): kept 更多（保留 cut 所在 turn 起点）
-  // 只往前扫会在大 turn 场景损失严重（选 100k 只留 43k），所以取两边更接近的那个。
+  // 從 cut 雙向找最近的 real user msg boundary，選讓 kept tokens 更接近 retain 的方向
+  // - forward (ks++): kept 更少（跳過 cut→下一 user 之間整段 assistant）
+  // - backward (ks--): kept 更多（保留 cut 所在 turn 起點）
+  // 只往前掃會在大 turn 場景損失嚴重（選 100k 只留 43k），所以取兩邊更接近的那個。
   let ks_fwd = cut;
   while (ks_fwd < convs.length && !isRealUserMsg(convs[ks_fwd])) ks_fwd++;
   let ks_back = cut;
@@ -256,7 +256,7 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
   let ks;
   if (ks_fwd >= convs.length) {
     ks = ks_back;
-    console.warn('⚠️  forward-scan 越过末尾，用 backward (ks ' + ks_back + ')');
+    console.warn('⚠️  forward-scan 越過末尾，用 backward (ks ' + ks_back + ')');
   } else if (!isRealUserMsg(convs[ks_back])) {
     ks = ks_fwd;
     console.warn('⚠️  backward-scan 未找到 real user，用 forward (ks ' + ks_fwd + ')');
@@ -265,30 +265,30 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
     const d_fwd = Math.abs(t_fwd - retain);
     ks = d_back <= d_fwd ? ks_back : ks_fwd;
   }
-  console.log('   候选 boundary: backward ~' + t_back + ' tok vs forward ~' + t_fwd + ' tok (retain=' + retain + ') → 选 ' + (ks === ks_back ? 'backward' : 'forward'));
+  console.log('   候選 boundary: backward ~' + t_back + ' tok vs forward ~' + t_fwd + ' tok (retain=' + retain + ') → 選 ' + (ks === ks_back ? 'backward' : 'forward'));
   const kept = convs.slice(ks);
   if (!kept.length) { console.error('❌ kept is empty (no real user message in conversation), aborting'); process.exit(1); }
   let tc = 0;
   for (const e of kept) if (e.type === 'assistant' && Array.isArray(e.message?.content)) tc += e.message.content.filter(b => b.type === 'thinking').length;
-  console.log('✂️  保留: ' + kept.length + ' 条 (~' + kept.reduce((s, e) => s + estimateTokens(e), 0) + ' tok) | thinking: ' + tc);
+  console.log('✂️  保留: ' + kept.length + ' 條 (~' + kept.reduce((s, e) => s + estimateTokens(e), 0) + ' tok) | thinking: ' + tc);
   const ns = uuid4(); let pu = null;
   for (const e of kept) { e.sessionId = ns; e.parentUuid = pu; pu = e.uuid; }
 
-  // 自检 2（内存中验证 parentUuid 链，写文件前）
-  try { verifyParentChain(kept); console.log('✅ parentUuid 链连贯'); }
-  catch (e) { console.error('❌ parentUuid 验证失败: ' + e.message); process.exit(1); }
+  // 自檢 2（記憶體中驗證 parentUuid 鏈，寫檔前）
+  try { verifyParentChain(kept); console.log('✅ parentUuid 鏈連貫'); }
+  catch (e) { console.error('❌ parentUuid 驗證失敗: ' + e.message); process.exit(1); }
 
-  // base64 sanitize：写新 jsonl 前把 image block 的 base64 替换成 text 说明
+  // base64 sanitize：寫新 jsonl 前把 image block 的 base64 替換成 text 說明
   const imgCount = kept.reduce((n, e) => n + (Array.isArray(e.message?.content) ? e.message.content.filter(b => b.type === 'image' && b.source?.data).length : 0), 0);
   const sanitized = kept.map(sanitizeEvent);
-  if (imgCount) console.log('🖼️  sanitize 了 ' + imgCount + ' 张图（base64 替换为 text 占位）');
+  if (imgCount) console.log('🖼️  sanitize 了 ' + imgCount + ' 張圖（base64 替換為 text 佔位）');
 
-  // 交接包注入：把 --inject 指定的文件内容作为新 jsonl 的第一条 user 事件。
-  // 让新 session 睁眼的第一份读物，是上一段自己亲手写的交接，不是断崖。
-  // 交接包怎么写、写什么，见 docs/DESIGN.md 的「交接包协议」。
+  // 交接包注入：把 --inject 指定的檔案內容作為新 jsonl 的第一條 user 事件。
+  // 讓新 session 睜眼的第一份讀物，是上一段自己親手寫的交接，不是斷崖。
+  // 交接包怎麼寫、寫什麼，見 docs/DESIGN.md 的「交接包協議」。
   if (injectFile) {
     const injText = fs.readFileSync(injectFile, 'utf-8').trim();
-    const body = '<forge-handoff>\n（这不是对方发来的消息——是过隧道前的你留下的交接包。读完直接继续，一切照旧。）\n\n'
+    const body = '<forge-handoff>\n（這不是對方發來的訊息——是過隧道前的你留下的交接包。讀完直接繼續，一切照舊。）\n\n'
       + injText + '\n</forge-handoff>';
     const tmpl = sanitized.find(e => e.type === 'user') || sanitized[0];
     const inj = JSON.parse(JSON.stringify(tmpl));
@@ -307,14 +307,14 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
   const newFp = path.join(path.dirname(fp), ns + '.jsonl');
   fs.writeFileSync(newFp, sanitized.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf-8');
 
-  // 自检 1：写完后立即逐行 parse 验证
-  try { const ok = verifyParse(newFp); console.log('✅ JSONL parse 验证: ' + ok + ' 行'); }
-  catch (e) { console.error('❌ parse 验证失败: ' + e.message + '\n⚠️  删除新文件'); fs.unlinkSync(newFp); process.exit(1); }
+  // 自檢 1：寫完後立即逐行 parse 驗證
+  try { const ok = verifyParse(newFp); console.log('✅ JSONL parse 驗證: ' + ok + ' 行'); }
+  catch (e) { console.error('❌ parse 驗證失敗: ' + e.message + '\n⚠️  刪除新檔案'); fs.unlinkSync(newFp); process.exit(1); }
 
-  // 自检 3：记录 forge_history 用于回滚
+  // 自檢 3：記錄 forge_history 用於回滾
   recordHistory(sid, ns);
-  console.log('📝 已记录 forge_history: ' + sid + ' -> ' + ns);
-  console.log('📂 旧 jsonl 保留: ' + fp + ' (回滚用)');
+  console.log('📝 已記錄 forge_history: ' + sid + ' -> ' + ns);
+  console.log('📂 舊 jsonl 保留: ' + fp + ' (回滾用)');
 
   console.log('✅ 新ID: ' + ns + '\n🚀 claude --resume ' + ns);
 }
@@ -330,7 +330,7 @@ if (require.main === module) {
     else if (args[i] === '--skip-markers' && args[i + 1]) { SYNTHETIC_MARKERS = SYNTHETIC_MARKERS.concat(args[++i].split(',').map(s => s.trim()).filter(Boolean)); }
     else if (args[i] === '--help' || args[i] === '-h') {
       console.log('用法: node forge-reload.js [session-id] [--retain N] [--dry-run] [--squash-tools [chars]] [--inject file] [--skip-markers "a,b"] [--force]');
-      console.log('详见 README.md 与 docs/TUTORIAL.md。军规第一条：先备份，再 forge。');
+      console.log('詳見 README.md 與 docs/TUTORIAL.md。軍規第一條：先備份，再 forge。');
       process.exit(0);
     }
     else if (!args[i].startsWith('--')) sid = args[i];
@@ -338,7 +338,7 @@ if (require.main === module) {
   let fp;
   if (sid) {
     fp = findSessionFile(sid);
-    if (!fp) { console.error('❌ 在 ' + PROJECTS_ROOT + ' 的所有项目目录里都找不到 ' + sid + '.jsonl'); process.exit(1); }
+    if (!fp) { console.error('❌ 在 ' + PROJECTS_ROOT + ' 的所有專案目錄裡都找不到 ' + sid + '.jsonl'); process.exit(1); }
   } else {
     const latest = findLatest();
     fp = latest.fp; sid = latest.sid;
