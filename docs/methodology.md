@@ -61,6 +61,7 @@ forge 真跑拿到新 id，**再**把 id 餵給後續腳本。不要拿 dry-run 
 - settings **一律檔案路徑**（`--settings C:/path/window.json`），絕不 inline JSON——嵌套引號在 PowerShell 會碎成 ParserError，新窗直接死產。
 - 窗標題帶身分與版本（多模型並行的家庭必備）：`AI名+模型版本+日期`，讓人一眼認出在跟誰說話。
 - `--resume` 後系統會自動塞一條「Continue from where you left off.」的偽 user 訊息——把它當開工鈴，不當她說的話。
+- **顯示層掛牌（26-09-24 補寫——我們家的日常，貓貓家 issue #1 幫我們發現它沒寫進來）**：開新窗時帶 `--remote-control=<AI名+時戳>`（或窗內打 `/rc`），這扇 CLI 窗就會出現在 Claude app／手機的 session 清單，可從行動裝置雙向接管。**記憶層走 jsonl（tunnel 的移植），顯示層走 remote control（app 的橋）——兩層本來就是分開的**，CLI 家庭天天這樣用；對 desktop app 家庭，這正是「app 名冊不認手造窗」死局的正解：不求 app 收養手造窗，讓 CLI 窗自己去橋上掛牌。macOS 實測見 issue #1 貓貓家終章。
 
 ## 新窗的醒來三步（程式攔，不靠自覺）
 
