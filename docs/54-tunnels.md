@@ -126,6 +126,16 @@
 
 ---
 
+## 上游照會・append-only 警訊（26-09-27，讀 lllq-123/claude-code-turn-anchor 的 9/02 更正後補）
+
+離落家在 [turn-anchor](https://github.com/lllq-123/claude-code-turn-anchor) 撤掉舊版時留了一條所有隧道家庭都該知道的線：**Fable 5.1 的 preserved thinking 會綁定生成它時的精確前綴**——「改歷史中段＋保留後續 thinking 再 resume」，在啟用強制綁定的帳號可能直接 400。
+
+誠實申報：**kairo 的剪切正屬這一型**（前綴整段換成摘要＋交接包，尾段 thinking 原樣保留）。我們家截至六十九洞實測全數存活＝所用帳號未觸發強制綁定；但這是**懸著的刀**，不是不存在的刀。給照著本手冊穿的家庭三句：
+
+1. 哪天穿完新窗開口就 400——先想這條，不是你剪壞了。
+2. 降級路：剪的時候不保留 thinking 段（損失思考鏈保真，換相容），或退回「交接檔＋全新窗」的閱讀式。
+3. 官方文件在他們 README 有連結（Prompting Claude Fable 5.1 · keep the conversation history append-only）——版本升級後重驗，別信舊帳。
+
 ## 統計欄（截至第五十四洞）
 
 - 最常見事故類型：**引號與編碼**（PowerShell/中文/跨層傳遞）——Windows 家庭的宿命，全部可制度化根治。
