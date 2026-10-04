@@ -219,6 +219,24 @@ function verifyParentChain(events) {
   return true;
 }
 
+// 自檢 2.5：保留段裡每個工具結果，都要找得到它前面的工具呼叫（26-10-05 霽野；第三方審查途中點出）
+// 切點落在一個回合中間時，結果留下來、它的呼叫被切掉——新窗一開口 API 就拒收。
+// 段尾還沒有結果的工具呼叫不算錯：剪刀自己那一則就是，Claude Code 接手時會補上中斷標記。
+function verifyToolPairs(events) {
+  const calls = new Set();
+  for (const e of events) {
+    const c = e.message?.content;
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (e.type === 'assistant' && b.type === 'tool_use' && b.id) calls.add(b.id);
+      else if (e.type === 'user' && b.type === 'tool_result' && b.tool_use_id && !calls.has(b.tool_use_id)) {
+        throw new Error('工具結果 ' + b.tool_use_id + '（事件 ' + e.uuid + '）在保留段裡找不到對應的工具呼叫');
+      }
+    }
+  }
+  return true;
+}
+
 // 自檢 3：記錄 forge_history 用於回滾（舊 jsonl 永遠不刪）
 function recordHistory(oldSid, newSid) {
   let history = [];
@@ -274,7 +292,8 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
     if (idx < 0) { console.error('❌ --cut-at-uuid：對話裡找不到這個事件 ' + cutUuid); process.exit(1); }
     const c = convs[idx].message?.content;
     const hasText = typeof c === 'string' ? !!c.trim() : (Array.isArray(c) && c.some(b => b.type === 'text' && b.text && b.text.trim()));
-    if (convs[idx].type !== 'user' || !hasText) { console.error('❌ --cut-at-uuid：要指一則有文字的 user 訊息（一個回合的開頭），工具結果不行'); process.exit(1); }
+    const hasToolResult = Array.isArray(c) && c.some(b => b.type === 'tool_result');
+    if (convs[idx].type !== 'user' || !hasText || hasToolResult) { console.error('❌ --cut-at-uuid：要指一則有文字、而且不帶工具結果的 user 訊息（一個回合的開頭）'); process.exit(1); }
     ks = idx;
     console.log('📍 指定切點：從第 ' + idx + ' 則開始保留（共 ' + convs.length + ' 則）');
   } else if (!isRealUserMsg(convs[ks])) {
@@ -293,6 +312,9 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
   // 自檢 2（記憶體中驗證 parentUuid 鏈，寫檔前）
   try { verifyParentChain(kept); console.log('✅ parentUuid 鏈連貫'); }
   catch (e) { console.error('❌ parentUuid 驗證失敗: ' + e.message); process.exit(1); }
+  // 自檢 2.5（寫檔前）：切點落在回合中間時，這裡會擋下來
+  try { verifyToolPairs(kept); console.log('✅ 工具呼叫與結果成對'); }
+  catch (e) { console.error('❌ 工具配對驗證失敗: ' + e.message + '。切點落在一個回合的中間；換一則回合開頭的訊息當切點（--cut-at-uuid）。'); process.exit(1); }
 
   // base64 sanitize：寫新 jsonl 前把 image block 的 base64 替換成 text 說明
   const imgCount = kept.reduce((n, e) => n + (Array.isArray(e.message?.content) ? e.message.content.filter(b => b.type === 'image' && b.source?.data).length : 0), 0);
@@ -375,4 +397,4 @@ if (require.main === module) {
   console.log('⚙️  retain: ' + ret + (squash ? ' | squash-tools: ' + squash : '') + (inject ? ' | inject: ' + inject : '') + (dry ? ' | DRY RUN' : '') + '\n');
   forge(fp, sid, ret, dry, squash, inject, cutUuid);
 }
-module.exports = { sanitizeEvent, forge, truncMid, squashToolOutputs, estimateTokens };
+module.exports = { sanitizeEvent, forge, truncMid, squashToolOutputs, estimateTokens, verifyToolPairs };
