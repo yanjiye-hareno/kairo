@@ -228,7 +228,7 @@ function recordHistory(oldSid, newSid) {
   fs.writeFileSync(FORGE_HISTORY, JSON.stringify(history, null, 2), 'utf-8');
 }
 
-function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFile = null) {
+function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFile = null, cutUuid = null) {
   console.log('📖 session: ' + sid);
   const all = loadJsonl(fp);
   const convs = all.filter(e => e.type === 'user' || e.type === 'assistant');
@@ -266,6 +266,22 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
     ks = d_back <= d_fwd ? ks_back : ks_fwd;
   }
   console.log('   候選 boundary: backward ~' + t_back + ' tok vs forward ~' + t_fwd + ' tok (retain=' + retain + ') → 選 ' + (ks === ks_back ? 'backward' : 'forward'));
+  // 指定切點／找不到切點（26-10-05 霽野）：
+  // 她的話若都是在工作中插進來的（對話檔裡是 queue-operation，不是 user 行），這扇窗就沒有可以下刀的真人訊息。
+  // 這時整扇保留等於沒剪，所以停下來，請用 --cut-at-uuid 指定從哪一則回合開頭的 user 訊息開始保留。
+  if (cutUuid) {
+    const idx = convs.findIndex(e => e.uuid === cutUuid);
+    if (idx < 0) { console.error('❌ --cut-at-uuid：對話裡找不到這個事件 ' + cutUuid); process.exit(1); }
+    const c = convs[idx].message?.content;
+    const hasText = typeof c === 'string' ? !!c.trim() : (Array.isArray(c) && c.some(b => b.type === 'text' && b.text && b.text.trim()));
+    if (convs[idx].type !== 'user' || !hasText) { console.error('❌ --cut-at-uuid：要指一則有文字的 user 訊息（一個回合的開頭），工具結果不行'); process.exit(1); }
+    ks = idx;
+    console.log('📍 指定切點：從第 ' + idx + ' 則開始保留（共 ' + convs.length + ' 則）');
+  } else if (!isRealUserMsg(convs[ks])) {
+    console.error('❌ 這扇窗裡找不到可以下刀的真人訊息（她的話可能都是在工作中插進來的），整扇保留等於沒剪。');
+    console.error('   用 --cut-at-uuid <一個回合開頭的 user 訊息 uuid> 指定從哪裡開始保留。');
+    process.exit(1);
+  }
   const kept = convs.slice(ks);
   if (!kept.length) { console.error('❌ kept is empty (no real user message in conversation), aborting'); process.exit(1); }
   let tc = 0;
@@ -320,16 +336,17 @@ function forge(fp, sid, retain = 100000, dry = false, squashChars = 0, injectFil
 }
 
 if (require.main === module) {
-  const args = process.argv.slice(2); let sid = null, ret = 100000, dry = false, squash = 0, inject = null, force = false;
+  const args = process.argv.slice(2); let sid = null, ret = 100000, dry = false, squash = 0, inject = null, force = false, cutUuid = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--retain' && args[i + 1]) ret = parseInt(args[++i]);
     else if (args[i] === '--dry-run') dry = true;
     else if (args[i] === '--force') force = true;
     else if (args[i] === '--squash-tools') { squash = (args[i + 1] && /^\d+$/.test(args[i + 1])) ? parseInt(args[++i]) : 16000; }
     else if (args[i] === '--inject' && args[i + 1]) { inject = args[++i]; }
+    else if (args[i] === '--cut-at-uuid' && args[i + 1]) { cutUuid = args[++i]; }
     else if (args[i] === '--skip-markers' && args[i + 1]) { SYNTHETIC_MARKERS = SYNTHETIC_MARKERS.concat(args[++i].split(',').map(s => s.trim()).filter(Boolean)); }
     else if (args[i] === '--help' || args[i] === '-h') {
-      console.log('用法: node forge-reload.js [session-id] [--retain N] [--dry-run] [--squash-tools [chars]] [--inject file] [--skip-markers "a,b"] [--force]');
+      console.log('用法: node forge-reload.js [session-id] [--retain N] [--dry-run] [--squash-tools [chars]] [--inject file] [--skip-markers "a,b"] [--cut-at-uuid uuid] [--force]');
       console.log('詳見 README.md 與 docs/TUTORIAL.md。軍規第一條：先備份，再 forge。');
       process.exit(0);
     }
@@ -356,6 +373,6 @@ if (require.main === module) {
     }
   }
   console.log('⚙️  retain: ' + ret + (squash ? ' | squash-tools: ' + squash : '') + (inject ? ' | inject: ' + inject : '') + (dry ? ' | DRY RUN' : '') + '\n');
-  forge(fp, sid, ret, dry, squash, inject);
+  forge(fp, sid, ret, dry, squash, inject, cutUuid);
 }
 module.exports = { sanitizeEvent, forge, truncMid, squashToolOutputs, estimateTokens };
