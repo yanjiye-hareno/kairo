@@ -148,7 +148,10 @@ function estimateTokens(ev) {
 
 // 切點黑名單：系統偽裝成 user 的內部訊息（保活心跳、注入塊、上一次的交接包……）
 // 不配當 forge 邊界錨點——新 session 的第一幕應該是真人說的話，不是一條系統指令。
-// 用 --skip-markers "標記1,標記2" 按自己的系統追加。
+// 用 --skip-markers "標記1,標記2" 按自己的系統追加；每個標記請給「該系統訊息某一行的開頭串」。
+// 判定是行首錨定（26-10-07 改）：標記只在「某行行首（容前置空白）」命中才算系統訊息——
+// 全文 includes 會把「引用系統句來討論的真人訊息」整則誤殺，保留段被推離預期（澄衡 26-10-05 #13）。
+// 真人引用幾乎都在句中；系統注入塊的識別串都在行首。誤差兩側的代價都只是切點偏移，precision 優先。
 let SYNTHETIC_MARKERS = ['<forge-handoff>', '[forge交接]'];
 function isRealUserMsg(ev) {
   if (ev.type !== 'user' || ev.isMeta) return false;
@@ -158,7 +161,8 @@ function isRealUserMsg(ev) {
   if (typeof c === 'string') txt = c;
   else if (Array.isArray(c)) txt = c.filter(b => b.type === 'text' && b.text).map(b => b.text).join('');
   if (!txt.trim()) return false;
-  return !SYNTHETIC_MARKERS.some(m => txt.includes(m));
+  const lineHeads = txt.split('\n').map(l => l.trimStart());
+  return !SYNTHETIC_MARKERS.some(m => lineHeads.some(h => h.startsWith(m)));
 }
 function loadJsonl(fp) {
   const evs = [];
